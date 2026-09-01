@@ -427,3 +427,15 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# ---- BH_VpnBrowser: 로컬 전용 비밀 정보 ----
+# 실제 설정은 %APPDATA%\BH_VpnBrowser\settings.json 에만 저장되고 저장소에는 들어가지 않습니다.
+# 아래는 실수로 프로젝트 안에 설정/자격 증명을 만들었을 때를 대비한 방어선입니다.
+settings.json
+appsettings.*.json
+*.local.json
+secrets.json
+credentials.json
+*.pfx
+*.pem
+*.key

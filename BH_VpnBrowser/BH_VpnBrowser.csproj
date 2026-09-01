@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\Assets\AppIcon.ico.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\BH_VpnBrowser.deps.json.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\BH_VpnBrowser.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\BH_VpnBrowser.dll.manifest" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\BH_VpnBrowser.exe.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\BH_VpnBrowser.runtimeconfig.json.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\Launcher.exe.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\Microsoft.Web.WebView2.Core.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\Microsoft.Web.WebView2.WinForms.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\Microsoft.Web.WebView2.Wpf.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\runtimes\win-arm64\native\WebView2Loader.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\runtimes\win-x64\native\WebView2Loader.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_0\runtimes\win-x86\native\WebView2Loader.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\Assets\AppIcon.ico.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\BH_VpnBrowser.deps.json.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\BH_VpnBrowser.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\BH_VpnBrowser.dll.manifest" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\BH_VpnBrowser.exe.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\BH_VpnBrowser.runtimeconfig.json.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\Launcher.exe.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\Microsoft.Web.WebView2.Core.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\Microsoft.Web.WebView2.WinForms.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\Microsoft.Web.WebView2.Wpf.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\runtimes\win-arm64\native\WebView2Loader.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\runtimes\win-x64\native\WebView2Loader.dll.deploy" />
+    <None Include="bin\publish\Application Files\BH_VpnBrowser_1_0_0_1\runtimes\win-x86\native\WebView2Loader.dll.deploy" />
+    <None Include="bin\publish\BH_VpnBrowser.application" />
+    <None Include="bin\publish\setup.exe" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>
