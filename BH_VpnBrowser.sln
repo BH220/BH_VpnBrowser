@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BH_VpnBrowser", "BH_VpnBrow
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PublishPage", "PublishPage", "{C8D5274F-AC00-46C7-1F8D-E88E81087A52}"
 	ProjectSection(SolutionItems) = preProject
-		Index.html = Index.html
+		iIndex.html = iIndex.html
 	EndProjectSection
 EndProject
 Global
