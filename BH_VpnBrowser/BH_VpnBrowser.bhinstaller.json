@@ -1,0 +1,12 @@
+{
+  "Name": "BH Vpn Browser",
+  "Publisher": "BH Soft",
+  "Version": "3.0.9.10",
+  "Description": "VPN 전용 브라우저",
+  "RootPath": "C:\\Program Files\\BH Soft\\BH Vpn Browser",
+  "DataRootPath": "C:\\ProgramData\\BH Soft\\BH Vpn Browser",
+  "RegistryKey": "SOFTWARE\\BH Soft\\BH Vpn Browser",
+  "MainExe": "BH_VpnBrowser.exe",
+  "MainIcon": "",
+  "ProgramId": 8
+}

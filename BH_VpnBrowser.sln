@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36717.8
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BH_VpnBrowser", "BH_VpnBrowser\BH_VpnBrowser.csproj", "{6296DF50-F8A3-4088-A345-C6022F5A3643}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "1.Execute", "1.Execute", "{5AEDC995-9A84-D21E-A776-162FF4653AEC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "2. Publish", "2. Publish", "{C8D5274F-AC00-46C7-1F8D-E88E81087A52}"
+	ProjectSection(SolutionItems) = preProject
+		Publish\index.html = Publish\index.html
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6296DF50-F8A3-4088-A345-C6022F5A3643}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6296DF50-F8A3-4088-A345-C6022F5A3643}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6296DF50-F8A3-4088-A345-C6022F5A3643}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6296DF50-F8A3-4088-A345-C6022F5A3643}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{6296DF50-F8A3-4088-A345-C6022F5A3643} = {5AEDC995-9A84-D21E-A776-162FF4653AEC}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CDE1E52F-D22D-4921-ACE5-E992B78BC1D0}
+	EndGlobalSection
+EndGlobal
