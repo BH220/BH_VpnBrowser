@@ -74,6 +74,13 @@
   .tag.now{border-color:var(--accent); color:#8AB4F8}
   .rel ul{margin:0; padding-left:19px; color:var(--muted); font-size:14px}
   .rel li{margin-bottom:5px}
+  /* 이전 버전은 접어 두고, 머리줄(버전·날짜)을 눌러 펼칩니다. */
+  .rel details>summary{cursor:pointer; list-style:none}
+  .rel details>summary::-webkit-details-marker{display:none}
+  .rel details>summary::after{content:"펼치기"; margin-left:auto; font-size:11.5px; color:var(--muted);
+    border:1px solid var(--border); border-radius:999px; padding:2px 9px}
+  .rel details[open]>summary::after{content:"접기"}
+  .rel details>summary:hover b{text-decoration:underline}
 
   /* 넓은 내용은 각자 안에서 스크롤시키고, 문서 자체는 가로로 넘치지 않게 합니다. */
   .table-wrap{overflow-x:auto}
@@ -132,12 +139,12 @@
     <div class="badges">
       <span class="badge">버전 <b id="version">1.0.0.2</b></span>
       <span class="badge">Windows <b>10 / 11</b> (64비트)</span>
-      <span class="badge">다운로드 <b>약 1.6MB</b></span>
+      <span class="badge">다운로드 <b data-size>약 1.6MB</b></span>
       <span class="badge">게시자 <b>BH Soft</b></span>
     </div>
     <div class="cta">
-      <a class="btn btn-primary" href="setup.exe">설치하기</a>
-      <a class="btn btn-ghost" href="BH_VpnBrowser.application">.NET이 이미 있다면</a>
+      <!--  이 페이지와 같은 경로의 install.exe 를 받습니다.  -->
+      <a class="btn btn-primary" href="install.exe" download>설치하기</a>
       <span class="hint">설치 관리자가 필요한 런타임을 함께 설치합니다. 설치 후에는 실행할 때마다 업데이트를 확인합니다.</span>
     </div>
   </div>
@@ -178,15 +185,16 @@
           <li>'현재 외부 IP 확인'이 보던 페이지를 덮지 않고 새 탭에서 열립니다.</li>
         </ul>
       </div>
-      <div class="rel-item">
-        <div class="rel-head"><b>1.0.0.1</b><time>2026-09-01</time></div>
+      <!--  이전 버전: 접혀 있고 머리줄을 누르면 펼쳐집니다. 새 버전을 추가할 때는 위의 현재 버전을 이 형태로 바꿔 내려 둡니다.  -->
+      <details class="rel-item">
+        <summary class="rel-head"><b>1.0.0.1</b><time>2026-09-01</time></summary>
         <ul>
           <li>앱 전용 L2TP/IPsec 터널을 구현했습니다. 로컬 SOCKS5 프록시가 VPN 어댑터에 바인딩합니다.</li>
           <li>터널이 알려준 DNS로 이름을 해석해 DNS 누수를 막습니다.</li>
           <li>탭 브라우저, 다운로드 관리, VPN 설정 화면을 넣었습니다.</li>
           <li>서버가 받아주는 PPP 조합을 자동으로 찾아, 다음 연결부터는 한 번에 붙습니다.</li>
         </ul>
-      </div>
+      </details>
     </div>
   </div>
 </section>
@@ -201,7 +209,7 @@
       <tr><th>아키텍처</th><td>x64</td></tr>
       <tr><th>런타임</th><td>.NET 데스크톱 런타임 8.0 (x64) — 없으면 설치 관리자가 함께 설치합니다</td></tr>
       <tr><th>브라우저 엔진</th><td>Microsoft Edge WebView2 런타임 — Windows 11에는 기본 포함</td></tr>
-      <tr><th>다운로드 크기</th><td>약 1.6MB (런타임 별도)</td></tr>
+      <tr><th>다운로드 크기</th><td><span data-size>약 1.6MB</span> (런타임 별도)</td></tr>
       <tr><th>네트워크</th><td>L2TP/IPsec 아웃바운드 허용 (UDP 500 · 4500)</td></tr>
       <tr><th>권한</th><td>앱 실행과 VPN 연결에는 관리자 권한이 필요 없습니다. 아래 NAT 설정만 최초 1회 필요합니다.</td></tr>
     </table>
@@ -243,21 +251,30 @@ Import-Certificate -FilePath "BHSoft-CodeSigning.cer" -CertStoreLocation Cert:\L
 <footer>
   <div class="wrap foot">
     <div>BH VPN Browser · 게시자 <b>BH Soft</b></div>
-    <div class="right">문의 <a href="https://vb.bhsoft.co.kr/">vb.bhsoft.co.kr</a></div>
+    <div class="right">문의 <a href="mailto:contact@bhsoft.co.kr">contact@bhsoft.co.kr</a></div>
   </div>
 </footer>
 
 <script>
-// 게시된 매니페스트에서 실제 버전을 읽어 표시합니다. 못 읽으면 적혀 있는 값을 그대로 둡니다.
-fetch('BH_VpnBrowser.application', { cache: 'no-store' })
-  .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('not found')); })
-  .then(function (xml) {
-    var id = new DOMParser().parseFromString(xml, 'application/xml')
-      .getElementsByTagName('assemblyIdentity')[0];
-    var v = id && id.getAttribute('version');
-    if (v) { document.getElementById('version').textContent = v; }
+// 버전과 다운로드 용량은 빌드 시점에 같은 경로에 만들어지는 version.json 에서 읽습니다.
+//   { "version": "3.0.9.10", "downloadSizeBytes": 1677721 }
+// downloadSizeBytes 대신 "downloadSize": "약 1.6MB" 처럼 표시 문자열을 줘도 됩니다.
+// 못 읽으면(로컬에서 직접 열어 본 경우 등) 적혀 있는 값을 그대로 둡니다.
+fetch('version.json', { cache: 'no-store' })
+  .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('not found')); })
+  .then(function (info) {
+    if (info.version) { document.getElementById('version').textContent = info.version; }
+    var size = typeof info.downloadSizeBytes === 'number' ? formatSize(info.downloadSizeBytes) : info.downloadSize;
+    if (size) {
+      document.querySelectorAll('[data-size]').forEach(function (el) { el.textContent = size; });
+    }
   })
-  .catch(function () { /* 로컬에서 직접 열어 본 경우 등 */ });
+  .catch(function () {});
+
+function formatSize(bytes) {
+  var mb = bytes / 1048576;
+  return '약 ' + (mb >= 10 ? Math.round(mb) : mb.toFixed(1)) + 'MB';
+}
 
 document.querySelectorAll('.copy').forEach(function (btn) {
   btn.addEventListener('click', function () {

@@ -427,3 +427,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# 게시 프로필은 외부 프로젝트가 호출하므로 저장소에 포함
+!BH_VpnBrowser/Properties/PublishProfiles/FolderProfile.pubxml
+
+# 배포물(zip, update.txt, version.json, 안내 페이지)은 저장소에 포함. 위의 publish/ 규칙(대소문자 무시)에 대한 예외
+!/Publish/
