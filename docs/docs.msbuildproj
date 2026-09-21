@@ -1,0 +1,32 @@
+<Project>
+
+	<!--
+	  빌드 산출물이 없는 파일 관리용 프로젝트입니다. 솔루션 탐색기에서 docs 폴더(GitHub Pages 배포물)의 실제 내용을
+	  그대로 보여 주며, 파일이 추가·삭제되면 자동으로 반영됩니다(SDK 형식 프로젝트의 와일드카드 감시).
+	  솔루션 빌드에서는 아무 일도 하지 않습니다.
+
+	  SDK 형식 프로젝트는 복원 기록(project.assets.json 등)을 둘 중간 폴더가 필요합니다. 새 obj 폴더를 만들지 않도록
+	  본체 프로젝트의 obj(이미 있고 git 이 무시함) 아래 docs\ 를 씁니다. 이 경로는 SDK 가 import 되기 전에 정해져야 해서
+	  Sdk 특성 대신 Sdk.props / Sdk.targets 를 직접 import 합니다.
+	-->
+	<PropertyGroup>
+		<BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\BH_VpnBrowser\obj\docs\</BaseIntermediateOutputPath>
+		<MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+		<BaseOutputPath>$(BaseIntermediateOutputPath)bin\</BaseOutputPath>
+	</PropertyGroup>
+
+	<Import Project="Sdk.props" Sdk="Microsoft.Build.NoTargets" Version="3.7.56" />
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<EnableDefaultItems>false</EnableDefaultItems>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="**\*" Exclude="obj\**;bin\**;.vs\**;*.msbuildproj" />
+	</ItemGroup>
+
+	<Import Project="Sdk.targets" Sdk="Microsoft.Build.NoTargets" Version="3.7.56" />
+
+</Project>

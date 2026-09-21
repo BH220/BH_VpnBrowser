@@ -124,7 +124,6 @@
     <span class="pub">BH Soft</span>
     <nav>
       <a href="#features">기능</a>
-      <a href="#release">릴리스 노트</a>
       <a href="#requirements">설치 사양</a>
       <a href="#setup">설치 전 준비</a>
     </nav>
@@ -167,34 +166,6 @@
         <h3><span class="dot" style="background:#C8262C"></span>DNS·WebRTC 누수 차단</h3>
         <p>이름 해석을 터널이 알려준 DNS로 직접 처리하고, 프록시를 우회하는 WebRTC UDP 경로를 막습니다.</p>
       </div>
-    </div>
-  </div>
-</section>
-
-<section id="release">
-  <div class="wrap">
-    <h2>릴리스 노트</h2>
-    <p class="lead">설치 후에는 실행할 때마다 최신 버전을 확인해 자동으로 갱신합니다.</p>
-    <div class="rel">
-      <div class="rel-item now">
-        <div class="rel-head"><b>1.0.0.2</b><time>2026-09-02</time><span class="tag now">현재 버전</span></div>
-        <ul>
-          <li>설치 매니페스트에 코드 서명을 적용했습니다 (BH Soft).</li>
-          <li>주소창 오른쪽 끝에 확대/축소 표시를 추가했습니다. Ctrl + 마우스 휠, Ctrl +/−, Ctrl+0을 지원합니다.</li>
-          <li>링크로 열리는 새 탭이 주소만 띄운 채 멈춰 있던 문제를 고쳤습니다.</li>
-          <li>'현재 외부 IP 확인'이 보던 페이지를 덮지 않고 새 탭에서 열립니다.</li>
-        </ul>
-      </div>
-      <!--  이전 버전: 접혀 있고 머리줄을 누르면 펼쳐집니다. 새 버전을 추가할 때는 위의 현재 버전을 이 형태로 바꿔 내려 둡니다.  -->
-      <details class="rel-item">
-        <summary class="rel-head"><b>1.0.0.1</b><time>2026-09-01</time></summary>
-        <ul>
-          <li>앱 전용 L2TP/IPsec 터널을 구현했습니다. 로컬 SOCKS5 프록시가 VPN 어댑터에 바인딩합니다.</li>
-          <li>터널이 알려준 DNS로 이름을 해석해 DNS 누수를 막습니다.</li>
-          <li>탭 브라우저, 다운로드 관리, VPN 설정 화면을 넣었습니다.</li>
-          <li>서버가 받아주는 PPP 조합을 자동으로 찾아, 다음 연결부터는 한 번에 붙습니다.</li>
-        </ul>
-      </details>
     </div>
   </div>
 </section>
@@ -256,25 +227,18 @@ Import-Certificate -FilePath "BHSoft-CodeSigning.cer" -CertStoreLocation Cert:\L
 </footer>
 
 <script>
-// 버전과 다운로드 용량은 빌드 시점에 같은 경로에 만들어지는 version.json 에서 읽습니다.
-//   { "version": "3.0.9.10", "downloadSizeBytes": 1677721 }
-// downloadSizeBytes 대신 "downloadSize": "약 1.6MB" 처럼 표시 문자열을 줘도 됩니다.
+// 버전과 다운로드 용량은 같은 경로의 index.json 에서 읽습니다.
+//   { "ver": "1.0.0.1", "vol": "약 1.5MB" }
 // 못 읽으면(로컬에서 직접 열어 본 경우 등) 적혀 있는 값을 그대로 둡니다.
-fetch('version.json', { cache: 'no-store' })
+fetch('index.json', { cache: 'no-store' })
   .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('not found')); })
   .then(function (info) {
-    if (info.version) { document.getElementById('version').textContent = info.version; }
-    var size = typeof info.downloadSizeBytes === 'number' ? formatSize(info.downloadSizeBytes) : info.downloadSize;
-    if (size) {
-      document.querySelectorAll('[data-size]').forEach(function (el) { el.textContent = size; });
+    if (info.ver) { document.getElementById('version').textContent = info.ver; }
+    if (info.vol) {
+      document.querySelectorAll('[data-size]').forEach(function (el) { el.textContent = info.vol; });
     }
   })
   .catch(function () {});
-
-function formatSize(bytes) {
-  var mb = bytes / 1048576;
-  return '약 ' + (mb >= 10 ? Math.round(mb) : mb.toFixed(1)) + 'MB';
-}
 
 document.querySelectorAll('.copy').forEach(function (btn) {
   btn.addEventListener('click', function () {
