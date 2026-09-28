@@ -88,9 +88,11 @@ namespace BH_VpnBrowser.Services
             }
             finally
             {
-                // 남은 질의를 정리하고, 그 작업들이 끝난 뒤에 CTS 를 폐기합니다.
+                // 남은 질의를 취소하고, 그 작업들이 끝난 뒤에 CTS 를 폐기합니다.
+                // 취소된 질의는 예외로 끝날 수 있는데, 여기서 그 예외가 새면 이미 얻은 결과까지 날아갑니다
+                // (finally 의 예외가 return 을 덮어씁니다). 그래서 결과만 기다리고 예외는 무시합니다.
                 attempt.Cancel();
-                await Task.WhenAll(pending).ConfigureAwait(false);
+                await Task.WhenAll(pending).ContinueWith(_ => { }, TaskScheduler.Default).ConfigureAwait(false);
             }
 
             return [];
@@ -108,7 +110,11 @@ namespace BH_VpnBrowser.Services
                 return viaUdp;
             }
 
-            token.ThrowIfCancellationRequested();
+            // 다른 서버가 먼저 답해 취소된 경우. 예외 대신 "답 없음"으로 조용히 끝냅니다.
+            if (token.IsCancellationRequested)
+            {
+                return [];
+            }
 
             var viaTcp = await AttemptAsync(() => QueryTcpAsync(server, host, token));
             if (viaTcp.Length > 0)

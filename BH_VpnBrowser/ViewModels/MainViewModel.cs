@@ -32,6 +32,16 @@ namespace BH_VpnBrowser.ViewModels
         /// </summary>
         private BrowserTabViewModel? _spareTab;
 
+        /// <summary>다운로드마다 그것을 시작한 탭. 탭을 닫아도 다운로드가 끝날 때까지 뷰를 살려 두는 데 씁니다.</summary>
+        private readonly Dictionary<DownloadItemViewModel, BrowserTabViewModel> _downloadOwners = [];
+
+        /// <summary>
+        /// 목록에서는 빠졌지만 진행 중인 다운로드가 있어 아직 폐기하지 않은 탭.
+        /// 다운로드는 그 WebView2 에 묶여 있어서 뷰를 폐기하면 그대로 끊깁니다.
+        /// 링크로 열린 팝업이 다운로드로 이어지면 Chromium 이 곧바로 창 닫기를 요청하므로, 뷰는 숨기고 다운로드가 끝난 뒤 폐기합니다.
+        /// </summary>
+        private readonly HashSet<BrowserTabViewModel> _retiringTabs = [];
+
         [ObservableProperty]
         private BrowserTabViewModel? _activeTab;
 
@@ -115,6 +125,11 @@ namespace BH_VpnBrowser.ViewModels
         [RelayCommand]
         private async Task InitializeAsync()
         {
+            if (DiagnosticLog.IsEnabled)
+            {
+                _ = HeartbeatAsync();
+            }
+
             _settings = _settingsStore.Load();
 
             var tunnel = await _tunnel.PrepareAsync(_settings, message => StatusText = message);
@@ -136,6 +151,16 @@ namespace BH_VpnBrowser.ViewModels
             if (!_settings.IsConfigured)
             {
                 await OpenSettingsAsync();
+            }
+        }
+
+        /// <summary>추적 로그가 켜져 있을 때만: UI 스레드가 살아 있는지 5초마다 남깁니다(멈춤 진단용).</summary>
+        private async Task HeartbeatAsync()
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5));
+                DiagnosticLog.Write("hb", $"ui alive tabs={Tabs.Count} downloads={Downloads.Count} retiring={_retiringTabs.Count}");
             }
         }
 
@@ -182,10 +207,13 @@ namespace BH_VpnBrowser.ViewModels
             IBrowserView view;
             try
             {
+                DiagnosticLog.Write("tab", $"뷰 생성 시작 spare={spare} url={url}");
                 view = await _browserFactory.CreateAsync();
+                DiagnosticLog.Write("tab", $"뷰 생성 완료 spare={spare}");
             }
             catch (Exception ex)
             {
+                DiagnosticLog.Write("tab", $"뷰 생성 실패 {ex}");
                 StatusText = "탭 생성 실패: " + ex.Message;
                 return null;
             }
@@ -193,7 +221,7 @@ namespace BH_VpnBrowser.ViewModels
             var tab = new BrowserTabViewModel(view, this);
             AttachTab(tab);
 
-            // 예비 탭은 탭 목록에 넣지 않고 새 창 요청이 올 때 승격시킵니다.
+            // 예비 탭(새 창 요청 때 승격)과 배경 다운로드 뷰는 탭 목록에 넣지 않습니다.
             if (!spare)
             {
                 Tabs.Add(tab);
@@ -228,7 +256,7 @@ namespace BH_VpnBrowser.ViewModels
 
             tab.PropertyChanged += Tab_PropertyChanged;
 
-            tab.View.DownloadStarting += (_, operation) => AddDownload(operation);
+            tab.View.DownloadStarting += (_, request) => AddDownload(request.Operation, tab);
             tab.View.NewWindowRequested += OnNewWindowRequested;
         }
 
@@ -316,7 +344,8 @@ namespace BH_VpnBrowser.ViewModels
 
             Tabs.RemoveAt(index);
             tab.PropertyChanged -= Tab_PropertyChanged;
-            tab.Dispose();
+            tab.IsSelected = false;
+            RetireTab(tab);
 
             if (Tabs.Count == 0)
             {
@@ -329,6 +358,22 @@ namespace BH_VpnBrowser.ViewModels
                 SelectTab(Tabs[Math.Min(index, Tabs.Count - 1)]);
             }
         }
+
+        /// <summary>진행 중인 다운로드가 없으면 바로 폐기하고, 있으면 숨긴 채 끝날 때까지 기다립니다.</summary>
+        private void RetireTab(BrowserTabViewModel tab)
+        {
+            if (TabHasActiveDownloads(tab))
+            {
+                _retiringTabs.Add(tab);
+                return;
+            }
+
+            _retiringTabs.Remove(tab);
+            tab.Dispose();
+        }
+
+        private bool TabHasActiveDownloads(BrowserTabViewModel tab) =>
+            _downloadOwners.Any(pair => ReferenceEquals(pair.Value, tab) && pair.Key.CanCancel);
 
         partial void OnActiveTabChanged(BrowserTabViewModel? value)
         {
@@ -498,21 +543,38 @@ namespace BH_VpnBrowser.ViewModels
 
         // ================= 다운로드 =================
 
-        private void AddDownload(IDownloadOperation operation)
+        private void AddDownload(IDownloadOperation operation, BrowserTabViewModel owner)
         {
             var item = new DownloadItemViewModel(operation);
             item.PropertyChanged += Download_PropertyChanged;
+            _downloadOwners[item] = owner;
             Downloads.Insert(0, item);
 
             UpdateDownloadSummary();
             IsDownloadsOpen = true;
+
+            // 다운로드로 바뀐 이동은 NavigationCompleted 가 실패로 끝나 "이동 실패"가 찍히므로 바로 덮어씁니다.
+            StatusText = $"다운로드 시작: {item.FileName}";
         }
 
         private void Download_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName is nameof(DownloadItemViewModel.CanCancel) or nameof(DownloadItemViewModel.IsCompleted))
+            if (e.PropertyName is not (nameof(DownloadItemViewModel.CanCancel) or nameof(DownloadItemViewModel.IsCompleted)))
             {
-                UpdateDownloadSummary();
+                return;
+            }
+
+            UpdateDownloadSummary();
+
+            if (sender is not DownloadItemViewModel { CanCancel: false } item || !_downloadOwners.TryGetValue(item, out var owner))
+            {
+                return;
+            }
+
+            // 닫아 둔 탭의 마지막 다운로드가 끝났으면 이제 뷰를 폐기합니다.
+            if (_retiringTabs.Contains(owner))
+            {
+                RetireTab(owner);
             }
         }
 
@@ -522,6 +584,7 @@ namespace BH_VpnBrowser.ViewModels
             foreach (var finished in Downloads.Where(d => !d.CanCancel).ToList())
             {
                 finished.PropertyChanged -= Download_PropertyChanged;
+                _downloadOwners.Remove(finished);
                 Downloads.Remove(finished);
             }
 

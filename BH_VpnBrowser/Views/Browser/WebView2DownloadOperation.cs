@@ -1,4 +1,5 @@
 using BH_VpnBrowser.Browser;
+using BH_VpnBrowser.Services;
 using Microsoft.Web.WebView2.Core;
 
 namespace BH_VpnBrowser.Views.Browser
@@ -7,13 +8,30 @@ namespace BH_VpnBrowser.Views.Browser
     internal sealed class WebView2DownloadOperation : IDownloadOperation
     {
         private readonly CoreWebView2DownloadOperation _operation;
+        private int _progressEvents;
 
         public WebView2DownloadOperation(CoreWebView2DownloadOperation operation)
         {
             _operation = operation;
-            operation.BytesReceivedChanged += (_, _) => ProgressChanged?.Invoke(this, EventArgs.Empty);
-            operation.StateChanged += (_, _) => StateChanged?.Invoke(this, EventArgs.Empty);
+
+            operation.BytesReceivedChanged += (_, _) =>
+            {
+                if (DiagnosticLog.IsEnabled && ++_progressEvents % 50 == 0)
+                {
+                    DiagnosticLog.Write("download", $"진행 {BytesReceived}/{TotalBytesToReceive}");
+                }
+
+                ProgressChanged?.Invoke(this, EventArgs.Empty);
+            };
+
+            operation.StateChanged += (_, _) =>
+            {
+                DiagnosticLog.Write("download", $"상태 {State} {InterruptReason} {BytesReceived}/{TotalBytesToReceive} → {ResultFilePath}");
+                StateChanged?.Invoke(this, EventArgs.Empty);
+            };
         }
+
+        public string Uri => _operation.Uri;
 
         public string ResultFilePath => _operation.ResultFilePath;
 

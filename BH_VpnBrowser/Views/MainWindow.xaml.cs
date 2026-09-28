@@ -48,7 +48,94 @@ namespace BH_VpnBrowser.Views
             var handle = new WindowInteropHelper(this).Handle;
             var preference = DwmCornerRound;
             _ = DwmSetWindowAttribute(handle, DwmCornerPreference, ref preference, sizeof(int));
+
+            HwndSource.FromHwnd(handle)?.AddHook(WindowProc);
         }
+
+        /// <summary>WM_GETMINMAXINFO</summary>
+        private const int WmGetMinMaxInfo = 0x0024;
+
+        private const uint MonitorDefaultToNearest = 2;
+
+        private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WmGetMinMaxInfo)
+            {
+                ConstrainMaximizedBoundsToWorkArea(hwnd, lParam);
+            }
+
+            return IntPtr.Zero;
+        }
+
+        /// <summary>
+        /// WindowStyle=None 창을 최대화하면 Windows 가 모니터 전체 크기에 보이지 않는 테두리까지 더해 배치해서
+        /// 작업 표시줄 위로 창(과 DWM 그림자)이 걸칩니다. 최대화 크기와 위치를 모니터의 작업 영역에 맞춥니다.
+        /// 다중 모니터를 위해 위치는 해당 모니터 기준 상대 좌표로 줍니다.
+        /// </summary>
+        private static void ConstrainMaximizedBoundsToWorkArea(IntPtr hwnd, IntPtr lParam)
+        {
+            var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+            if (!GetMonitorInfo(monitor, ref info))
+            {
+                return;
+            }
+
+            var limits = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+            limits.MaxPosition.X = info.Work.Left - info.Monitor.Left;
+            limits.MaxPosition.Y = info.Work.Top - info.Monitor.Top;
+            limits.MaxSize.X = info.Work.Right - info.Work.Left;
+            limits.MaxSize.Y = info.Work.Bottom - info.Work.Top;
+            Marshal.StructureToPtr(limits, lParam, fDeleteOld: false);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        /// <summary>MINMAXINFO</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MinMaxInfo
+        {
+            public NativePoint Reserved;
+            public NativePoint MaxSize;
+            public NativePoint MaxPosition;
+            public NativePoint MinTrackSize;
+            public NativePoint MaxTrackSize;
+        }
+
+        /// <summary>MONITORINFO</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MonitorInfo
+        {
+            public int Size;
+            public NativeRect Monitor;
+            public NativeRect Work;
+            public uint Flags;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
         private void MinimizeButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
@@ -61,12 +148,7 @@ namespace BH_VpnBrowser.Views
         {
             var maximized = WindowState == WindowState.Maximized;
 
-            // WindowStyle=None 으로 최대화하면 리사이즈 테두리만큼 화면 밖으로 나가 잘립니다.
-            var border = SystemParameters.WindowResizeBorderThickness;
-            RootPanel.Margin = maximized
-                ? new Thickness(border.Left, border.Top, border.Right, border.Bottom)
-                : new Thickness(0);
-
+            // 최대화 크기는 WM_GETMINMAXINFO 에서 작업 영역에 맞추므로 여백 보정은 필요 없습니다.
             // 최대화 상태에서는 겹친 사각형(복원) 모양으로 바꿉니다.
             MaximizeGlyph.Data = Geometry.Parse(maximized
                 ? "M 2.5,0.5 L 9.5,0.5 L 9.5,7.5 M 0.5,2.5 L 7.5,2.5 L 7.5,9.5 L 0.5,9.5 Z"

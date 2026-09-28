@@ -37,6 +37,11 @@ dotnet build BH_VpnBrowser/BH_VpnBrowser.csproj -c Release
 
 WebView2 Evergreen 런타임이 설치돼 있어야 실행됩니다.
 
+## 진단
+
+환경 변수 `BH_VPNBROWSER_TRACE` 에 파일 경로를 주고 실행하면 터널·SOCKS5·이동·다운로드·창 이벤트가 그 파일에 한 줄씩 기록됩니다.
+디버거가 붙어 있으면 출력 창에도 같은 내용이 나옵니다. 비밀값은 기록하지 않습니다.
+
 ## 구조
 
 MVVM(CommunityToolkit.Mvvm) + Microsoft.Extensions.DependencyInjection.

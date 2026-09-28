@@ -1,5 +1,6 @@
 using System.Windows;
 using BH_VpnBrowser.DependencyInjection;
+using BH_VpnBrowser.Services;
 using BH_VpnBrowser.Views;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,11 @@ namespace BH_VpnBrowser
         {
             base.OnStartup(e);
 
+            // 처리되지 않은 예외는 추적 로그에 남깁니다(진단용). 동작은 바꾸지 않습니다.
+            DispatcherUnhandledException += (_, args) => DiagnosticLog.Write("crash", $"Dispatcher: {args.Exception}");
+            AppDomain.CurrentDomain.UnhandledException += (_, args) => DiagnosticLog.Write("crash", $"AppDomain: {args.ExceptionObject}");
+            TaskScheduler.UnobservedTaskException += (_, args) => DiagnosticLog.Write("crash", $"Task: {args.Exception}");
+
             _services = ServiceRegistration.BuildServiceProvider();
 
             var window = _services.GetRequiredService<MainWindow>();
@@ -26,6 +32,7 @@ namespace BH_VpnBrowser
         /// <summary>싱글턴(터널의 로컬 SOCKS5 등)을 정리합니다.</summary>
         protected override void OnExit(ExitEventArgs e)
         {
+            DiagnosticLog.Write("app", $"종료 code={e.ApplicationExitCode}");
             _services?.Dispose();
             base.OnExit(e);
         }

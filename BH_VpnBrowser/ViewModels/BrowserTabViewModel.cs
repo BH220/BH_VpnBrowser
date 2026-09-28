@@ -77,6 +77,13 @@ namespace BH_VpnBrowser.ViewModels
             {
                 IsLoading = false;
                 SyncHistory();
+
+                // 다운로드로 바뀐 이동처럼 실패한 이동은 페이지가 그대로이므로 주소창도 실제 주소로 되돌립니다.
+                if (!result.IsSuccess)
+                {
+                    Address = view.Source;
+                }
+
                 NavigationFinished?.Invoke(this, result);
             };
 

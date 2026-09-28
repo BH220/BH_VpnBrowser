@@ -51,7 +51,8 @@ namespace BH_VpnBrowser.Browser
         /// <summary>Ctrl+휠처럼 뷰가 스스로 바꾼 배율도 여기로 옵니다.</summary>
         event EventHandler? ZoomFactorChanged;
 
-        event EventHandler<IDownloadOperation>? DownloadStarting;
+        /// <summary>다운로드가 시작될 때. <see cref="DownloadRequest.Cancel"/> 을 켜면 파일을 만들기 전에 취소됩니다.</summary>
+        event EventHandler<DownloadRequest>? DownloadStarting;
 
         /// <summary>target=_blank 등으로 새 창을 요청받았을 때.</summary>
         event EventHandler<NewWindowRequest>? NewWindowRequested;
@@ -74,6 +75,14 @@ namespace BH_VpnBrowser.Browser
     }
 
     public sealed record BrowserNavigationResult(bool IsSuccess, NavigationFailure Failure, string Detail);
+
+    /// <summary>시작되는 다운로드. 이벤트 처리 중에 <see cref="Cancel"/> 을 켜면 시작 자체가 취소됩니다.</summary>
+    public sealed class DownloadRequest(IDownloadOperation operation)
+    {
+        public IDownloadOperation Operation { get; } = operation;
+
+        public bool Cancel { get; set; }
+    }
 
     /// <summary>
     /// 새 창 요청에 대한 ViewModel 의 응답.

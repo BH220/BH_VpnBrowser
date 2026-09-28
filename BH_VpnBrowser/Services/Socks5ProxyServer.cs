@@ -42,7 +42,11 @@ namespace BH_VpnBrowser.Services
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
-            _ = AcceptLoopAsync(_shutdown.Token);
+            // 중계는 반드시 스레드 풀에서 돌립니다. UI 스레드에서 그냥 시작하면 모든 await 가 UI 스레드로 이어져
+            // (1) 중계 전체가 UI 스레드를 거치고 (2) UI 스레드가 WebView2 동기 호출로 막히는 순간 브라우저에 데이터가
+            // 끊기며, 브라우저 프로세스가 그 데이터를 기다리는 동안 그 동기 호출도 끝나지 않아 앱이 멈춥니다
+            // (팝업으로 시작한 다운로드가 수십 KB 에서 멈추고 창이 굳던 원인).
+            _ = Task.Run(() => AcceptLoopAsync(_shutdown.Token));
         }
 
         /// <summary>OS 가 할당한 로컬 포트. WebView2 의 --proxy-server 에 넣습니다.</summary>
@@ -82,6 +86,7 @@ namespace BH_VpnBrowser.Services
                 if (!IsTrustedPeer(client))
                 {
                     RejectedPeers++;
+                    DiagnosticLog.Write("socks", $"거절 {client.Client.RemoteEndPoint} (이 앱의 프로세스가 아님)");
                     client.Dispose();
                     continue;
                 }
@@ -133,10 +138,12 @@ namespace BH_VpnBrowser.Services
                 catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException)
                 {
                     // 클라이언트나 원격이 먼저 끊은 정상적인 상황.
+                    DiagnosticLog.Write("socks", $"중계 종료 {ex.GetType().Name}: {ex.Message}");
                 }
                 catch (Exception ex)
                 {
                     LastError = ex.Message;
+                    DiagnosticLog.Write("socks", $"중계 오류 {ex}");
                 }
             }
         }
@@ -248,6 +255,7 @@ namespace BH_VpnBrowser.Services
 
             if (addresses.Length == 0)
             {
+                DiagnosticLog.Write("socks", $"DNS 응답 없음 {destination.Host}");
                 await SendReplyAsync(stream, ReplyHostUnreachable, token);
                 return null;
             }
@@ -269,6 +277,7 @@ namespace BH_VpnBrowser.Services
                 catch (Exception ex) when (ex is SocketException or OperationCanceledException)
                 {
                     LastError = $"연결 실패 ({destination.Host}:{destination.Port})";
+                    DiagnosticLog.Write("socks", $"연결 실패 {destination.Host}:{destination.Port} via {address}: {ex.Message}");
                     socket.Dispose();
                 }
             }

@@ -12,6 +12,9 @@ namespace BH_VpnBrowser.Browser
     /// </summary>
     public interface IDownloadOperation
     {
+        /// <summary>받는 주소.</summary>
+        string Uri { get; }
+
         /// <summary>저장될(된) 파일의 전체 경로. 진행 중에 바뀔 수 있습니다.</summary>
         string ResultFilePath { get; }
 

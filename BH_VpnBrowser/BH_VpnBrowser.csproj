@@ -36,6 +36,14 @@
 
 	<ItemGroup>
 		<Folder Include="bin\" />
+		<Folder Include="Properties\PublishProfiles\" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="index.html">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+ 
 
 </Project>
