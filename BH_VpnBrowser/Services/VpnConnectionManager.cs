@@ -358,9 +358,10 @@ namespace BH_VpnBrowser.Services
                 }
             }
 
+            Process? process = null;
             try
             {
-                using var process = Process.Start(info);
+                process = Process.Start(info);
                 if (process is null)
                 {
                     return new CommandResult(false, $"{fileName} 을(를) 시작하지 못했습니다.");
@@ -381,11 +382,33 @@ namespace BH_VpnBrowser.Services
             }
             catch (OperationCanceledException)
             {
+                // 결과만 실패로 돌려주고 두면 멈춘 powershell.exe 가 계속 남고,
+                // 뒤늦게 끝나면서 그 사이 다시 만든 연결 항목을 건드릴 수도 있습니다.
+                Kill(process);
                 return new CommandResult(false, "명령이 시간 내에 끝나지 않았습니다.");
             }
             catch (Exception ex)
             {
                 return new CommandResult(false, ex.Message);
+            }
+            finally
+            {
+                process?.Dispose();
+            }
+        }
+
+        private static void Kill(Process? process)
+        {
+            try
+            {
+                if (process is { HasExited: false })
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                // 그 사이에 스스로 끝났거나 종료할 권한이 없는 경우. 더 할 수 있는 일이 없습니다.
             }
         }
     }

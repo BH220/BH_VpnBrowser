@@ -9,7 +9,8 @@ namespace BH_VpnBrowser.Services
 {
     /// <summary>
     /// VPN 이 내려준 DNS 서버로 직접 질의합니다.
-    /// 시스템 리졸버(<see cref="Dns"/>)를 쓰면 로컬 DNS 로 질의가 새어 나가므로 사용하지 않습니다.
+    /// 시스템 리졸버(<see cref="Dns"/>)를 쓰면 로컬 DNS 로 질의가 새어 나가므로 어떤 경우에도 사용하지 않습니다.
+    /// VPN 이 DNS 를 내려주지 않으면 공용 DNS(<see cref="PublicServers"/>)에 묻되, 그 질의도 터널로만 내보냅니다.
     /// </summary>
     public sealed class TunnelDnsResolver(VpnAdapter adapter)
     {
@@ -21,13 +22,18 @@ namespace BH_VpnBrowser.Services
         private static readonly TimeSpan UdpTimeout = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan TcpTimeout = TimeSpan.FromSeconds(5);
 
+        /// <summary>VPN 이 DNS 서버를 내려주지 않았을 때 터널을 통해 묻는 공용 DNS.</summary>
+        public static IReadOnlyList<IPAddress> PublicServers { get; } =
+            [IPAddress.Parse("1.1.1.1"), IPAddress.Parse("8.8.8.8")];
+
         private readonly ConcurrentDictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>VPN 이 DNS 를 내려주지 않아 시스템 리졸버로 넘어간 적이 있으면 true.</summary>
-        public bool HasFallenBackToSystemDns { get; private set; }
+        /// <summary>실제로 질의하는 서버 목록. 어느 쪽이든 소켓은 VPN 어댑터에 묶여 나갑니다.</summary>
+        private readonly IReadOnlyList<IPAddress> _servers = ServersFor(adapter);
 
-        /// <summary>UDP 가 막혀 TCP 로 질의한 적이 있으면 true. 상태 표시에 씁니다.</summary>
-        public bool UsesTcpDns { get; private set; }
+        /// <summary>이 어댑터로 질의할 DNS 서버. VPN 이 준 것이 있으면 그것, 없으면 공용 DNS.</summary>
+        public static IReadOnlyList<IPAddress> ServersFor(VpnAdapter adapter) =>
+            adapter.DnsServers.Count > 0 ? adapter.DnsServers : PublicServers;
 
         public async Task<IPAddress[]> ResolveAsync(string host, CancellationToken token)
         {
@@ -50,14 +56,8 @@ namespace BH_VpnBrowser.Services
 
             token.ThrowIfCancellationRequested();
 
-            if (adapter.DnsServers.Count > 0)
-            {
-                return [];
-            }
-
-            // VPN 이 DNS 를 내려주지 않은 구성. 이 경우에만 시스템 리졸버로 넘어갑니다.
-            HasFallenBackToSystemDns = true;
-            return await Dns.GetHostAddressesAsync(host, AddressFamily.InterNetwork, token);
+            // 답을 못 얻었으면 실패로 끝냅니다. 시스템 리졸버로 넘기면 질의가 물리 NIC 로 새어 나갑니다.
+            return [];
         }
 
         /// <summary>
@@ -68,7 +68,7 @@ namespace BH_VpnBrowser.Services
         {
             using var attempt = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-            var pending = adapter.DnsServers
+            var pending = _servers
                 .Select(server => QuerySafeAsync(server, host, attempt.Token))
                 .ToList();
 
@@ -116,13 +116,7 @@ namespace BH_VpnBrowser.Services
                 return [];
             }
 
-            var viaTcp = await AttemptAsync(() => QueryTcpAsync(server, host, token));
-            if (viaTcp.Length > 0)
-            {
-                UsesTcpDns = true;
-            }
-
-            return viaTcp;
+            return await AttemptAsync(() => QueryTcpAsync(server, host, token));
         }
 
         /// <summary>응답하지 않는 서버는 실패가 아니라 "답이 없음"으로 다룹니다.</summary>

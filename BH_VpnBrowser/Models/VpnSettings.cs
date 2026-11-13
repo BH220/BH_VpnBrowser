@@ -5,7 +5,7 @@ namespace BH_VpnBrowser.Models
     /// <summary>
     /// L2TP/IPsec 터널 설정. 이 앱의 브라우저 프로세스만 터널을 타게 하는 데 필요한 값들입니다.
     /// <para>
-    /// 저장 위치는 %APPDATA%\BH_VpnBrowser\settings.json 이며 저장소(git)에는 들어가지 않습니다.
+    /// 저장 위치는 C:\ProgramData\BH Soft\BH VpnBrowser\settings.json 이며 저장소(git)에는 들어가지 않습니다.
     /// 비밀번호와 사전 공유 키는 DPAPI(현재 사용자 키)로 암호화해 보관합니다.
     /// </para>
     /// </summary>
@@ -24,7 +24,7 @@ namespace BH_VpnBrowser.Models
         /// <summary>DPAPI 로 보호된 IPsec 사전 공유 키.</summary>
         public string ProtectedPreSharedKey { get; set; } = string.Empty;
 
-        /// <summary>앱 시작 시 VPN 이 끊겨 있으면 자동으로 연결합니다.</summary>
+        /// <summary>앱 시작 시, 그리고 실행 중에 VPN 이 끊겨 있으면 자동으로 연결합니다.</summary>
         public bool AutoConnect { get; set; } = true;
 
         /// <summary>
@@ -40,7 +40,10 @@ namespace BH_VpnBrowser.Models
         /// <summary>프록시를 우회하는 UDP 경로(WebRTC)로 실제 IP 가 새는 것을 막습니다.</summary>
         public bool BlockWebRtcLeak { get; set; } = true;
 
-        /// <summary>사설/로컬 주소는 터널을 거치지 않고 직결합니다.</summary>
+        /// <summary>
+        /// localhost 와 점 없는 호스트명(사내 PC 이름 등)은 터널을 거치지 않고 직결합니다.
+        /// 192.168.x.x 같은 사설 IP 는 여기에 해당하지 않고 항상 터널로 나갑니다(VPN 쪽 내부망에 닿게 됩니다).
+        /// </summary>
         public bool BypassLoopback { get; set; } = true;
 
         public string HomePage { get; set; } = "https://www.google.com";
@@ -73,7 +76,9 @@ namespace BH_VpnBrowser.Models
             {
                 $"--proxy-server=\"{proxy}\"",
 
-                // 지정하지 않으면 Chromium 이 사설/로컬 주소를 프록시 없이 직결로 보냅니다.
+                // Chromium 은 따로 지정하지 않아도 localhost·127.0.0.0/8·링크 로컬(169.254/16)을 프록시 없이 직결합니다.
+                //  <local>     : 그 기본 규칙에 더해 "점이 없는 호스트명"도 직결합니다. IP 리터럴(사설 IP 포함)은 해당하지 않습니다.
+                //  <-loopback> : 기본 규칙까지 빼서 localhost 도 프록시(터널)로 보냅니다.
                 BypassLoopback
                     ? "--proxy-bypass-list=\"<local>\""
                     : "--proxy-bypass-list=\"<-loopback>\"",
@@ -99,5 +104,17 @@ namespace BH_VpnBrowser.Models
 
         public bool AffectsBrowserEnvironment(VpnSettings other) =>
             BuildEnvironmentSignature() != other.BuildEnvironmentSignature();
+
+        /// <summary>
+        /// 이 값들이 바뀌면 Windows 연결 항목을 다시 만들고 다시 걸어야 합니다.
+        /// 홈페이지처럼 연결과 무관한 값만 바뀐 경우에는 살아 있는 터널을 건드리지 않기 위해 구분합니다.
+        /// </summary>
+        public bool AffectsConnection(VpnSettings other) =>
+            !string.Equals(ServerAddress, other.ServerAddress, StringComparison.OrdinalIgnoreCase)
+            || UserName != other.UserName
+            || Password != other.Password
+            || PreSharedKey != other.PreSharedKey
+            || !string.Equals(EncryptionLevel, other.EncryptionLevel, StringComparison.OrdinalIgnoreCase)
+            || !AuthMethods.SequenceEqual(other.AuthMethods, StringComparer.OrdinalIgnoreCase);
     }
 }

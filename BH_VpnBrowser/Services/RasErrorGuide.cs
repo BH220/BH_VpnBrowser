@@ -74,24 +74,5 @@ namespace BH_VpnBrowser.Services
             "이 PC 와 서버가 모두 공유기(NAT) 뒤에 있으면 Windows 가 L2TP 를 기본적으로 거부합니다.\n" +
             "  관리자 PowerShell 에서 아래를 실행하고 재부팅해 주세요:\n" +
             $"  {NatTraversalCommand}";
-
-        /// <summary>"Remote Access error 789 - ..." 또는 "오류 789" 형태에서 번호를 뽑습니다.</summary>
-        private static int ExtractErrorCode(string output)
-        {
-            foreach (var token in output.Split([' ', '\t', '\r', '\n', '-', ':'], StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (token.Length is 3 && int.TryParse(token, out var code) && code >= 600)
-                {
-                    return code;
-                }
-            }
-
-            return 0;
-        }
-
-        private static string FirstLine(string text) =>
-            text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .FirstOrDefault(l => l.Contains("error", StringComparison.OrdinalIgnoreCase) || l.Contains("오류"))
-            ?? text.Trim();
     }
 }

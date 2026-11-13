@@ -28,15 +28,20 @@ namespace BH_VpnBrowser.Services
         private const byte ReplyCommandNotSupported = 0x07;
         private const byte ReplyAddressNotSupported = 0x08;
 
-        private readonly VpnAdapter _adapter;
-        private readonly TunnelDnsResolver _resolver;
+        private const byte ReplyNetworkUnreachable = 0x03;
+
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _shutdown = new();
 
+        /// <summary>
+        /// 지금 중계에 쓰는 어댑터와 그 DNS 리졸버. 터널이 끊기면 null 이 되고, 그동안 들어온 요청은 전부 거절합니다(fail-closed).
+        /// 리스너(포트)는 그대로 두고 이 값만 바꾸므로, 터널이 다시 붙어도 브라우저를 다시 띄울 필요가 없습니다.
+        /// </summary>
+        private volatile Binding? _binding;
+
         public Socks5ProxyServer(VpnAdapter adapter)
         {
-            _adapter = adapter;
-            _resolver = new TunnelDnsResolver(adapter);
+            _binding = new Binding(adapter, new TunnelDnsResolver(adapter));
 
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -54,14 +59,20 @@ namespace BH_VpnBrowser.Services
 
         public string Endpoint => $"127.0.0.1:{Port}";
 
-        /// <summary>VPN 이 DNS 를 주지 않아 시스템 리졸버로 넘어갔는지 여부.</summary>
-        public bool HasDnsFallback => _resolver.HasFallenBackToSystemDns;
+        /// <summary>지금 묶여 있는 어댑터. 터널이 끊겨 통신을 막고 있으면 null.</summary>
+        public VpnAdapter? Adapter => _binding?.Adapter;
 
-        /// <summary>마지막으로 중계에 실패한 이유. 상태 표시에 사용합니다.</summary>
-        public string? LastError { get; private set; }
-
-        /// <summary>이 앱의 프로세스가 아니어서 거절한 접속 수. 진단용입니다.</summary>
-        public int RejectedPeers { get; private set; }
+        /// <summary>
+        /// 중계에 쓸 어댑터를 바꿉니다. null 을 주면 새 요청을 모두 거절합니다.
+        /// 이미 중계 중인 연결은 예전 어댑터의 소켓에 묶여 있어 터널이 내려가면 스스로 끊깁니다.
+        /// </summary>
+        public void UseAdapter(VpnAdapter? adapter)
+        {
+            _binding = adapter is null ? null : new Binding(adapter, new TunnelDnsResolver(adapter));
+            DiagnosticLog.Write("socks", adapter is null
+                ? "어댑터 해제 (통신 차단)"
+                : $"어댑터 지정 {adapter.Name} if={adapter.InterfaceIndex} {adapter.LocalAddress}");
+        }
 
         private async Task AcceptLoopAsync(CancellationToken token)
         {
@@ -85,7 +96,6 @@ namespace BH_VpnBrowser.Services
                 // 접속한 프로세스가 이 앱(또는 그 자식인 WebView2 프로세스)인지 확인합니다.
                 if (!IsTrustedPeer(client))
                 {
-                    RejectedPeers++;
                     DiagnosticLog.Write("socks", $"거절 {client.Client.RemoteEndPoint} (이 앱의 프로세스가 아님)");
                     client.Dispose();
                     continue;
@@ -142,7 +152,6 @@ namespace BH_VpnBrowser.Services
                 }
                 catch (Exception ex)
                 {
-                    LastError = ex.Message;
                     DiagnosticLog.Write("socks", $"중계 오류 {ex}");
                 }
             }
@@ -241,14 +250,23 @@ namespace BH_VpnBrowser.Services
         private async Task<Socket?> ConnectThroughTunnelAsync(
             NetworkStream stream, Destination destination, CancellationToken token)
         {
+            // 요청 하나는 처음부터 끝까지 같은 어댑터를 씁니다(도중에 바뀌어도 섞이지 않게).
+            var binding = _binding;
+            if (binding is null)
+            {
+                DiagnosticLog.Write("socks", $"차단 {destination.Host}:{destination.Port} (터널 없음)");
+                await SendReplyAsync(stream, ReplyNetworkUnreachable, token);
+                return null;
+            }
+
             IPAddress[] addresses;
             try
             {
-                addresses = await _resolver.ResolveAsync(destination.Host, token);
+                addresses = await binding.Resolver.ResolveAsync(destination.Host, token);
             }
             catch (Exception ex)
             {
-                LastError = $"DNS 실패 ({destination.Host}): {ex.Message}";
+                DiagnosticLog.Write("socks", $"DNS 실패 {destination.Host}: {ex.Message}");
                 await SendReplyAsync(stream, ReplyHostUnreachable, token);
                 return null;
             }
@@ -269,14 +287,13 @@ namespace BH_VpnBrowser.Services
 
                 try
                 {
-                    InterfaceBinder.BindTo(socket, _adapter);
+                    InterfaceBinder.BindTo(socket, binding.Adapter);
                     await socket.ConnectAsync(address, destination.Port, token);
                     await SendReplyAsync(stream, ReplySucceeded, token);
                     return socket;
                 }
                 catch (Exception ex) when (ex is SocketException or OperationCanceledException)
                 {
-                    LastError = $"연결 실패 ({destination.Host}:{destination.Port})";
                     DiagnosticLog.Write("socks", $"연결 실패 {destination.Host}:{destination.Port} via {address}: {ex.Message}");
                     socket.Dispose();
                 }
@@ -351,5 +368,7 @@ namespace BH_VpnBrowser.Services
         }
 
         private readonly record struct Destination(string Host, int Port);
+
+        private sealed record Binding(VpnAdapter Adapter, TunnelDnsResolver Resolver);
     }
 }

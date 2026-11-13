@@ -16,6 +16,13 @@ namespace BH_VpnBrowser.Services
         private const int TcpTableOwnerPidAll = 5;
         private const int ProcessQueryLimitedInformation = 0x1000;
         private const int ProcessBasicInformationClass = 0;
+        private const uint ErrorInsufficientBuffer = 122;
+
+        /// <summary>TCP 테이블 읽기를 다시 해 보는 횟수. 크기를 물은 뒤 읽기 전에 연결이 늘면 버퍼가 모자랍니다.</summary>
+        private const int TableReadAttempts = 4;
+
+        /// <summary>크기를 물은 뒤 늘어날 연결을 감안해 더 잡아 두는 여유(행 64개 분량).</summary>
+        private const int TableSlack = 64 * 24;
 
         /// <summary>부모를 따라 올라가는 최대 단계. WebView2 는 앱 → 브라우저 → 유틸리티(네트워크)로 두 단계입니다.</summary>
         private const int MaxAncestorDepth = 16;
@@ -29,37 +36,58 @@ namespace BH_VpnBrowser.Services
             var size = 0;
             _ = GetExtendedTcpTable(IntPtr.Zero, ref size, false, AddressFamilyInternet, TcpTableOwnerPidAll, 0);
 
-            var buffer = Marshal.AllocHGlobal(size);
-            try
+            // 크기를 물은 시점과 읽는 시점 사이에 연결이 늘면 ERROR_INSUFFICIENT_BUFFER 가 납니다.
+            // 그대로 포기하면 정상적인 WebView2 접속을 "모르는 프로세스"로 거절하게 되므로,
+            // 여유를 두고 잡은 뒤 그래도 모자라면 API 가 알려 준 크기로 다시 읽습니다.
+            for (var attempt = 0; attempt < TableReadAttempts; attempt++)
             {
-                if (GetExtendedTcpTable(buffer, ref size, false, AddressFamilyInternet, TcpTableOwnerPidAll, 0) != 0)
+                size += TableSlack;
+                var capacity = size;
+                var buffer = Marshal.AllocHGlobal(capacity);
+                try
                 {
-                    return null;
-                }
+                    var status = GetExtendedTcpTable(
+                        buffer, ref size, false, AddressFamilyInternet, TcpTableOwnerPidAll, 0);
 
-                var peerAddress = BitConverter.ToUInt32(peer.Address.GetAddressBytes(), 0);
-                var count = Marshal.ReadInt32(buffer);
-                var rowSize = Marshal.SizeOf<TcpRowOwnerPid>();
-
-                // 테이블은 항목 수(4바이트) 뒤에 행이 이어집니다.
-                for (var i = 0; i < count; i++)
-                {
-                    var row = Marshal.PtrToStructure<TcpRowOwnerPid>(buffer + 4 + i * rowSize);
-
-                    if (row.LocalAddress == peerAddress
-                        && PortOf(row.LocalPort) == peer.Port
-                        && PortOf(row.RemotePort) == listenPort)
+                    if (status == 0)
                     {
-                        return (int)row.OwningPid;
+                        return FindInTable(buffer, capacity, peer, listenPort);
+                    }
+
+                    if (status != ErrorInsufficientBuffer)
+                    {
+                        return null;
                     }
                 }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            }
 
-                return null;
-            }
-            finally
+            return null;
+        }
+
+        private static int? FindInTable(IntPtr buffer, int capacity, IPEndPoint peer, int listenPort)
+        {
+            var peerAddress = BitConverter.ToUInt32(peer.Address.GetAddressBytes(), 0);
+            var rowSize = Marshal.SizeOf<TcpRowOwnerPid>();
+            var count = Math.Min(Marshal.ReadInt32(buffer), (capacity - 4) / rowSize);
+
+            // 테이블은 항목 수(4바이트) 뒤에 행이 이어집니다.
+            for (var i = 0; i < count; i++)
             {
-                Marshal.FreeHGlobal(buffer);
+                var row = Marshal.PtrToStructure<TcpRowOwnerPid>(buffer + 4 + i * rowSize);
+
+                if (row.LocalAddress == peerAddress
+                    && PortOf(row.LocalPort) == peer.Port
+                    && PortOf(row.RemotePort) == listenPort)
+                {
+                    return (int)row.OwningPid;
+                }
             }
+
+            return null;
         }
 
         /// <summary>이 프로세스 자신이거나, 부모를 따라 올라가면 이 프로세스가 나오는지.</summary>

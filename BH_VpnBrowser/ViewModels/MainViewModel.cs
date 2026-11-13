@@ -27,6 +27,12 @@ namespace BH_VpnBrowser.ViewModels
         private VpnSettings _settings = new();
 
         /// <summary>
+        /// 저장은 됐는데 Windows 연결 항목에 반영하지 못한 설정이 있는지.
+        /// 사전 공유 키는 항목에서 읽어 비교할 수 없으므로, 실패했으면 다음 저장 때 값이 같아도 다시 적용합니다.
+        /// </summary>
+        private bool _applyPending;
+
+        /// <summary>
         /// 링크로 열리는 새 창에 즉시 넘겨줄 예비 탭.
         /// 새 창 요청 안에서 뷰를 새로 만들어 기다리면 그동안 요청한 페이지가 멈춰 있으므로 미리 하나 만들어 둡니다.
         /// </summary>
@@ -104,6 +110,8 @@ namespace BH_VpnBrowser.ViewModels
             _browserFactory = browserFactory;
             _dialogs = dialogs;
             _lifetime = lifetime;
+
+            _tunnel.StateChanged += OnTunnelStateChanged;
         }
 
         public ObservableCollection<BrowserTabViewModel> Tabs { get; } = [];
@@ -132,14 +140,7 @@ namespace BH_VpnBrowser.ViewModels
 
             _settings = _settingsStore.Load();
 
-            var tunnel = await _tunnel.PrepareAsync(_settings, message => StatusText = message);
-            TunnelStatus = tunnel.Status;
-            IsTunnelReady = tunnel.IsReady;
-
-            if (tunnel.SettingsChanged)
-            {
-                _settingsStore.Save(_settings);
-            }
+            await RefreshTunnelAsync();
 
             if (await InitializeBrowserAsync())
             {
@@ -152,6 +153,30 @@ namespace BH_VpnBrowser.ViewModels
             {
                 await OpenSettingsAsync();
             }
+        }
+
+        /// <summary>
+        /// 터널을 준비(또는 다시 준비)하고 배지에 반영합니다.
+        /// 이미 로컬 프록시가 떠 있으면 포트는 그대로라 브라우저를 다시 시작하지 않아도 됩니다.
+        /// </summary>
+        private async Task RefreshTunnelAsync()
+        {
+            var tunnel = await _tunnel.PrepareAsync(_settings, message => StatusText = message);
+            TunnelStatus = tunnel.Status;
+            IsTunnelReady = tunnel.IsReady;
+
+            if (tunnel.SettingsChanged)
+            {
+                _settingsStore.Save(_settings);
+            }
+        }
+
+        /// <summary>실행 중에 VPN 이 끊기거나 다시 붙었을 때. 배지와 상태 표시줄을 실제 상태에 맞춥니다.</summary>
+        private void OnTunnelStateChanged(object? sender, EventArgs e)
+        {
+            TunnelStatus = _tunnel.Status;
+            IsTunnelReady = _tunnel.IsReady;
+            StatusText = _tunnel.IsReady ? "터널 연결됨 - " + _tunnel.Status : _tunnel.Status;
         }
 
         /// <summary>추적 로그가 켜져 있을 때만: UI 스레드가 살아 있는지 5초마다 남깁니다(멈춤 진단용).</summary>
@@ -439,6 +464,9 @@ namespace BH_VpnBrowser.ViewModels
 
         private string DescribeFailure(BrowserNavigationResult result) => result.Failure switch
         {
+            // 로컬 프록시는 떠 있는데 터널만 끊긴 경우. 다시 붙으면 재시작 없이 그대로 통신됩니다.
+            NavigationFailure.CannotConnect when !_tunnel.IsReady && _tunnel.Endpoint is not null =>
+                "VPN 터널이 끊겨 통신을 차단했습니다. 다시 연결되면 새로 고치세요.",
             NavigationFailure.CannotConnect when !_tunnel.IsReady =>
                 "VPN 터널이 없어 통신을 차단했습니다. 메뉴 > VPN 설정에서 연결한 뒤 다시 시작하세요.",
             NavigationFailure.Canceled => "이동이 취소되었습니다.",
@@ -499,35 +527,73 @@ namespace BH_VpnBrowser.ViewModels
             IsMenuOpen = false;
 
             var wasConfigured = _settings.IsConfigured;
-            var hadTunnel = _tunnel.IsReady;
 
-            var updated = _dialogs.ShowSettings(_settings.Clone());
-            if (updated is null)
+            // 브라우저가 실제 로컬 프록시 주소를 받고 시작했는지. 닫힌 포트로 시작했으면 다시 시작해야만 터널을 탑니다.
+            // 프록시가 떠 있으면 포트가 유지되므로, VPN 을 다시 걸어도 브라우저는 그대로 쓸 수 있습니다.
+            var hasProxy = _tunnel.Endpoint is not null;
+            bool needsRestart;
+
+            // 설정 창의 연결 테스트와 아래 적용 과정은 VPN 을 끊고 다시 겁니다.
+            // 그동안 감시가 끼어들어 같은 항목을 동시에 다이얼하지 않게 멈춰 둡니다.
+            using (_tunnel.PauseMonitoring())
             {
-                return;
-            }
+                var updated = _dialogs.ShowSettings(_settings.Clone());
+                if (updated is null)
+                {
+                    // 취소했어도 연결 테스트가 VPN 을 다시 걸었을 수 있으므로 어댑터를 다시 맞춥니다.
+                    if (hasProxy)
+                    {
+                        await RefreshTunnelAsync();
+                    }
 
-            // 터널은 브라우저 엔진 생성 시점에 고정되므로, 새로 연결됐으면 재시작해야 반영됩니다.
-            var needsRestart = updated.AffectsBrowserEnvironment(_settings) || !hadTunnel || !wasConfigured;
+                    return;
+                }
 
-            _settingsStore.Save(updated);
-            _settings = updated;
+                needsRestart = updated.AffectsBrowserEnvironment(_settings) || !hasProxy || !wasConfigured;
+                var connectionChanged = updated.AffectsConnection(_settings);
 
-            // 저장만 하고 Windows VPN 항목에 반영하지 않으면 사전 공유 키 같은 값이
-            // 전화번호부에 빠진 채로 남아 연결이 실패합니다. 저장 = 적용이어야 합니다.
-            StatusText = "VPN 연결 항목에 적용하는 중...";
-            var applied = await _connections.ApplyAsync(updated);
+                _settingsStore.Save(updated);
+                _settings = updated;
 
-            if (!applied.Succeeded)
-            {
-                StatusText = "VPN 항목 적용 실패: " + applied.Message.Split('\n')[0];
-                _dialogs.ShowWarning("VPN 설정 적용 실패", applied.Message);
-                return;
+                // 저장만 하고 Windows VPN 항목에 반영하지 않으면 사전 공유 키 같은 값이
+                // 전화번호부에 빠진 채로 남아 연결이 실패합니다. 저장 = 적용이어야 합니다.
+                // 다만 적용은 연결을 끊고 항목을 다시 만드는 일이라, 연결과 무관한 값(홈페이지 등)만 바꿨고
+                // 항목이 이미 설정과 같으면 건드리지 않습니다.
+                if (connectionChanged || _applyPending || !await EntryMatchesAsync(updated))
+                {
+                    StatusText = "VPN 연결 항목에 적용하는 중...";
+                    var applied = await _connections.ApplyAsync(updated);
+                    _applyPending = !applied.Succeeded;
+
+                    if (!applied.Succeeded)
+                    {
+                        // 적용하다가 연결만 끊겼을 수 있으니 실제 상태를 배지에 반영합니다.
+                        if (hasProxy)
+                        {
+                            await RefreshTunnelAsync();
+                        }
+
+                        StatusText = "VPN 항목 적용 실패: " + applied.Message.Split('\n')[0];
+                        _dialogs.ShowWarning("VPN 설정 적용 실패", applied.Message);
+                        return;
+                    }
+                }
+
+                // 적용이 끊어 놓은 연결을 다시 걸고 같은 포트에 묶습니다.
+                // 이걸 빼면 "적용했습니다" 라고 해 놓고 이후 통신이 전부 실패합니다.
+                if (hasProxy)
+                {
+                    await RefreshTunnelAsync();
+                }
             }
 
             if (!needsRestart)
             {
-                StatusText = "설정을 적용했습니다.";
+                if (IsTunnelReady)
+                {
+                    StatusText = "설정을 적용했습니다.";
+                }
+
                 return;
             }
 
@@ -539,6 +605,16 @@ namespace BH_VpnBrowser.ViewModels
             {
                 StatusText = "설정이 저장되었습니다. 다음 실행부터 적용됩니다.";
             }
+        }
+
+        /// <summary>Windows 의 연결 항목이 이미 이 설정(서버·PPP 조합)으로 만들어져 있는지.</summary>
+        private async Task<bool> EntryMatchesAsync(VpnSettings settings)
+        {
+            var entries = await _connections.ListAsync();
+            var entry = entries.FirstOrDefault(
+                c => string.Equals(c.Name, VpnSettings.ConnectionName, StringComparison.OrdinalIgnoreCase));
+
+            return entry is not null && entry.Matches(settings);
         }
 
         // ================= 다운로드 =================

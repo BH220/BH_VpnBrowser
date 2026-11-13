@@ -130,7 +130,7 @@ namespace BH_VpnBrowser.ViewModels
                 }
 
                 var dns = adapter.DnsServers.Count == 0
-                    ? "DNS 미수신 (시스템 리졸버로 대체됩니다)"
+                    ? $"DNS 미수신 (터널을 통해 공용 DNS {string.Join(", ", TunnelDnsResolver.PublicServers)} 사용)"
                     : $"DNS {string.Join(", ", adapter.DnsServers)}";
 
                 SetStatus($"{connected.Message}\n{adapter.Name} · {adapter.LocalAddress} · {dns}", StatusKind.Success);
