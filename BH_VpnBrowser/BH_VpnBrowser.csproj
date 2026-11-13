@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<AppVersion>3.0.9.10</AppVersion>
+		<AppVersion>3.0.9.11</AppVersion>
 		<!-- 내부 참조 버전 -->
 		<AssemblyVersion>$(AppVersion)</AssemblyVersion>
 		<!-- 파일 버전 -->
